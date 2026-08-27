@@ -153,6 +153,8 @@ artifacts/
 .env
 .envrc
 .venv
+logs/
+.logs
 env/
 venv/
 ENV/

@@ -1,95 +1,99 @@
+import os
 import sys
 from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
-from sklearn.compose import ColumnTransformer
-from sklearn.impute import SimpleImputer
-from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from sklearn.preprocessing import RobustScaler
+from imblearn.over_sampling import SMOTE
 
 from src.exception import CustomException
 from src.logger import logging
-import os
-
 from src.utils import save_object
+
 
 @dataclass
 class DataTransformationConfig:
-    preprocessor_obj_file_path = os.path.join('artifacts', 'preprocessor.pkl')
+    preprocessor_obj_file_path: str = os.path.join("artifacts", "preprocessor.pkl")
+
 
 class DataTransformation:
     def __init__(self):
         self.data_transformation_config = DataTransformationConfig()
 
     def get_data_transformer_object(self):
-        '''
-        This function is responsible for data transformation
-        '''
+        """
+        V1-V28 are already PCA-scaled in the raw dataset. Amount and Time
+        are on very different raw scales, so RobustScaler (uses
+        median/IQR) is fit on them specifically — robust to the handful
+        of very large transactions that would distort a standard scaler.
+        """
         try:
-            numerical_columns = ['writing_score', 'reading_score']
-            categorical_columns = ['gender', 'race_ethnicity', 'parental_level_of_education', 'lunch', 'test_preparation_course']
-
-            numerical_pipeline = Pipeline(
-                steps=[
-                    ('imputer', SimpleImputer(strategy='median')),
-                    ('scaler', StandardScaler())
-                ]
-            )
-
-            categorical_pipeline = Pipeline(
-                steps=[
-                    ('imputer', SimpleImputer(strategy='most_frequent')),
-                    ('onehot', OneHotEncoder())
-                ]
-            )
-
-            logging.info(f"Categorical columns: {categorical_columns}")
-            logging.info(f"Numerical columns: {numerical_columns}")
-
-            preprocessor = ColumnTransformer(
-                transformers=[
-                    ('num_pipeline', numerical_pipeline, numerical_columns),
-                    ('cat_pipeline', categorical_pipeline, categorical_columns)
-                ]
-            )
-            return preprocessor
-
+            scaler = RobustScaler()
+            return scaler
         except Exception as e:
             raise CustomException(e, sys)
 
     def initiate_data_transformation(self, train_path, test_path):
+        """
+        IMPORTANT ORDERING, same principle as data_ingestion.py:
+        SMOTE is applied to the TRAINING fold only, AFTER the split that
+        already happened in data_ingestion.py. The test set loaded here
+        is used only for scaling (transform, not fit) and is never
+        resampled — it stays a realistic, imbalanced sample throughout
+        the whole pipeline.
+        """
         try:
             train_df = pd.read_csv(train_path)
             test_df = pd.read_csv(test_path)
-            logging.info("Read train and test data completed")
+            logging.info("Read train and test data for transformation")
 
-            logging.info("Obtaining preprocessing object")
+            target_column = "Class"
+            scale_columns = ["Amount", "Time"]
+
             preprocessing_obj = self.get_data_transformer_object()
 
-            target_column_name = 'math_score'
-            numerical_columns = ['writing_score', 'reading_score']
+            train_df[["scaled_amount", "scaled_time"]] = preprocessing_obj.fit_transform(
+                train_df[scale_columns]
+            )
+            test_df[["scaled_amount", "scaled_time"]] = preprocessing_obj.transform(
+                test_df[scale_columns]
+            )
 
-            input_feature_train_df = train_df.drop(columns=[target_column_name])
-            target_feature_train_df = train_df[target_column_name]
+            train_df = train_df.drop(columns=scale_columns)
+            test_df = test_df.drop(columns=scale_columns)
 
-            input_feature_test_df = test_df.drop(columns=[target_column_name])
-            target_feature_test_df = test_df[target_column_name]
+            input_feature_train_df = train_df.drop(columns=[target_column])
+            target_feature_train_df = train_df[target_column]
 
-            logging.info(f"Applying preprocessing object on training dataframe and testing dataframe.")
+            input_feature_test_df = test_df.drop(columns=[target_column])
+            target_feature_test_df = test_df[target_column]
 
-            input_feature_train_arr = preprocessing_obj.fit_transform(input_feature_train_df)
-            input_feature_test_arr = preprocessing_obj.transform(input_feature_test_df)
+            logging.info(
+                f"Before SMOTE: {target_feature_train_df.value_counts().to_dict()}"
+            )
+            smote = SMOTE(sampling_strategy=0.1, random_state=42)
+            input_feature_train_res, target_feature_train_res = smote.fit_resample(
+                input_feature_train_df, target_feature_train_df
+            )
+            logging.info(
+                f"After SMOTE (training fold only): "
+                f"{target_feature_train_res.value_counts().to_dict()}"
+            )
 
-            train_arr = np.c_[input_feature_train_arr, np.array(target_feature_train_df)]
-            test_arr = np.c_[input_feature_test_arr, np.array(target_feature_test_df)]
-
-            logging.info(f"Saved preprocessing object.")
+            train_arr = np.c_[
+                input_feature_train_res, np.array(target_feature_train_res)
+            ]
+            # test set: untouched by SMOTE, still reflects real-world imbalance
+            test_arr = np.c_[
+                input_feature_test_df, np.array(target_feature_test_df)
+            ]
 
             save_object(
                 file_path=self.data_transformation_config.preprocessor_obj_file_path,
-                obj=preprocessing_obj
+                obj=preprocessing_obj,
             )
+            logging.info("Saved preprocessing object")
 
             return (
                 train_arr,

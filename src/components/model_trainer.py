@@ -2,16 +2,9 @@ import os
 import sys
 from dataclasses import dataclass
 
-from catboost import CatBoostRegressor
-from sklearn.ensemble import (
-    AdaBoostRegressor,
-    GradientBoostingRegressor,
-    RandomForestRegressor,
-)
-from sklearn.linear_model import LinearRegression
-from sklearn.metrics import r2_score
-from sklearn.tree import DecisionTreeRegressor
-from xgboost import XGBRegressor
+from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import RandomForestClassifier
+from xgboost import XGBClassifier
 
 from src.exception import CustomException
 from src.logger import logging
@@ -20,7 +13,7 @@ from src.utils import save_object, evaluate_models
 
 @dataclass
 class ModelTrainerConfig:
-    trained_model_file_path = os.path.join("artifacts", "model.pkl")
+    trained_model_file_path: str = os.path.join("artifacts", "model.pkl")
 
 
 class ModelTrainer:
@@ -28,97 +21,54 @@ class ModelTrainer:
         self.model_trainer_config = ModelTrainerConfig()
 
     def initiate_model_trainer(self, train_array, test_array):
-        try:
-            logging.info("Splitting training and test data")
+        """
+        One model from each major family — enough range for breadth,
+        few enough to go deep on each: Logistic Regression (linear),
+        Random Forest (bagging ensemble), XGBoost (boosting ensemble).
 
-            X_train, y_train, X_test, y_test = (
-                train_array[:, :-1],
-                train_array[:, -1],
-                test_array[:, :-1],
-                test_array[:, -1],
-            )
+        The best model is picked by PR-AUC, not accuracy or even ROC-AUC —
+        PR-AUC is the most informative single metric on data this
+        imbalanced, since it's less forgiving of a high false-positive
+        rate on the majority class than ROC-AUC can be.
+        """
+        try:
+            logging.info("Splitting training and test arrays")
+            X_train, y_train = train_array[:, :-1], train_array[:, -1]
+            X_test, y_test = test_array[:, :-1], test_array[:, -1]
 
             models = {
-                "Random Forest": RandomForestRegressor(),
-                "Decision Tree": DecisionTreeRegressor(),
-                "Gradient Boosting": GradientBoostingRegressor(),
-                "Linear Regression": LinearRegression(),
-                "XGBRegressor": XGBRegressor(),
-                "CatBoosting Regressor": CatBoostRegressor(verbose=False),
-                "AdaBoost Regressor": AdaBoostRegressor(),
+                "LogisticRegression": LogisticRegression(
+                    C=0.1, max_iter=1000, random_state=42,
+                ),
+                "RandomForest": RandomForestClassifier(
+                    n_estimators=100, max_depth=14, min_samples_split=10,
+                    random_state=42
+                ),
+                "XGBoost": XGBClassifier(
+                    n_estimators=150, max_depth=6, learning_rate=0.1,
+                    eval_metric="logloss", random_state=42
+                ),
             }
 
-            params = {
-                "Decision Tree": {
-                    "criterion": ["squared_error", "absolute_error", "poisson"],
-                },
-                "Random Forest": {
-                    "n_estimators": [8, 16, 32, 64, 128, 256],
-                },
-                "Gradient Boosting": {
-                    "learning_rate": [0.1, 0.01, 0.05, 0.001],
-                    "subsample": [0.6, 0.7, 0.75, 0.8, 0.85, 0.9],
-                    "n_estimators": [8, 16, 32, 64, 128, 256],
-                },
-                "Linear Regression": {},
-                "XGBRegressor": {
-                    "learning_rate": [0.1, 0.01, 0.05, 0.001],
-                    "n_estimators": [8, 16, 32, 64, 128, 256],
-                },
-                "CatBoosting Regressor": {
-                    "depth": [6, 8, 10],
-                    "learning_rate": [0.01, 0.05, 0.1],
-                    "iterations": [30, 50, 100],
-                },
-                "AdaBoost Regressor": {
-                    "learning_rate": [0.1, 0.01, 0.5, 0.001],
-                    "n_estimators": [8, 16, 32, 64, 128, 256],
-                },
-            }
+            model_report: dict = evaluate_models(X_train, y_train, X_test, y_test, models)
+            for name, metrics in model_report.items():
+                logging.info(f"{name}: {metrics}")
 
-            model_report: dict = evaluate_models(
-                X_train=X_train,
-                y_train=y_train,
-                X_test=X_test,
-                y_test=y_test,
-                models=models,
-                params=params,
-            )
-
-            # Select best model based on test_score
-            best_model_name = max(
-                model_report, key=lambda k: model_report[k]["test_score"]
-            )
-
-            best_model_score = model_report[best_model_name]["test_score"]
+            best_model_name = max(model_report, key=lambda k: model_report[k]["pr_auc"])
+            best_model_score = model_report[best_model_name]["pr_auc"]
             best_model = models[best_model_name]
 
-            logging.info(f"Best model: {best_model_name}")
-            logging.info(f"Best test score: {best_model_score}")
+            logging.info(f"Best model: {best_model_name} (PR-AUC={best_model_score:.4f})")
 
-            if best_model_score < 0.6:
-                raise CustomException("No good model found", sys)
-
-            # Retrain best model on full training data (important)
-            best_params = params.get(best_model_name, {})
-            if best_params:
-                from sklearn.model_selection import GridSearchCV
-
-                gs = GridSearchCV(best_model, best_params, cv=3, n_jobs=-1)
-                gs.fit(X_train, y_train)
-                best_model = gs.best_estimator_
-            else:
-                best_model.fit(X_train, y_train)
+            if best_model_score < 0.5:
+                raise CustomException("No model met the minimum PR-AUC threshold", sys)
 
             save_object(
                 file_path=self.model_trainer_config.trained_model_file_path,
                 obj=best_model,
             )
 
-            predicted = best_model.predict(X_test)
-            r2_square = r2_score(y_test, predicted)
-
-            return r2_square
+            return best_model_name, model_report
 
         except Exception as e:
             raise CustomException(e, sys)

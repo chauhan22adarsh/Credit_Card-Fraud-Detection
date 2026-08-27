@@ -1,10 +1,9 @@
 pandas
 numpy
 scikit-learn
-matplotlib
-seaborn
-catboost
+
 xgboost
+imbalanced-learn
 dill
-Flask
+flask
 -e .
