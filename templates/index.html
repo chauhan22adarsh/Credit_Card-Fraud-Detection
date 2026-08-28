@@ -1,1 +1,29 @@
-<h1>Welcome to the ML App</h1>
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Credit Card Fraud Detection</title>
+    <style>
+        body { font-family: Arial, sans-serif; background: #0f172a; color: #e2e8f0;
+               display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+        .card { background: #1e293b; padding: 40px; border-radius: 12px; text-align: center; max-width: 480px; }
+        h1 { color: #f87171; }
+        a.button { display: inline-block; margin-top: 20px; padding: 12px 24px; background: #ef4444;
+                   color: white; text-decoration: none; border-radius: 8px; font-weight: bold; }
+        a.button:hover { background: #dc2626; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>Credit Card Fraud Detection</h1>
+        <p>A demo model trained on the real Kaggle Credit Card Fraud dataset
+           (284,807 transactions, 0.17% fraud), using a stratified
+           train/test split and SMOTE applied only to the training fold.</p>
+        <p style="font-size:12px; color:#94a3b8;">Note: the prediction form's
+        manual entry only takes Amount and Time — most of the model's real
+        signal comes from 28 other (anonymized) features not shown there.
+        Use the real dataset example buttons on the next page for an
+        accurate demo.</p>
+        <a class="button" href="/predictdata">Try a Prediction</a>
+    </div>
+</body>
+</html>
