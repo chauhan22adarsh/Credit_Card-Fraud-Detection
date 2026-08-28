@@ -1,111 +1,72 @@
+<!DOCTYPE html>
 <html>
+<head>
+    <title>Predict Transaction</title>
+    <style>
+        body { font-family: Arial, sans-serif; background: #0f172a; color: #e2e8f0;
+               display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 20px; }
+        .card { background: #1e293b; padding: 36px; border-radius: 12px; max-width: 480px; width: 90%; }
+        h1 { color: #f87171; text-align: center; margin-top: 0; font-size: 22px; }
+        p.sub { text-align: center; color: #94a3b8; font-size: 13px; margin-top: -8px; margin-bottom: 22px; line-height: 1.5; }
+
+        .txn-list { display: flex; flex-direction: column; gap: 8px; }
+        .txn-btn { display: flex; justify-content: space-between; align-items: center;
+                   padding: 12px 14px; border-radius: 8px; border: 1px solid #334155; background: #0f172a;
+                   color: #e2e8f0; cursor: pointer; font-size: 13px; width: 100%; text-align: left; }
+        .txn-btn:hover { border-color: #ef4444; background: #1a2337; }
+        .txn-btn .txn-id { color: #64748b; font-size: 11px; }
+        .txn-btn.picked { border-color: #ef4444; background: #1a2337; }
+
+        .result { margin-top: 22px; padding: 16px; border-radius: 8px; text-align: center; }
+        .result .verdict { font-weight: bold; font-size: 15px; }
+        .fraud-bg { background: #7f1d1d; color: #fecaca; }
+        .normal-bg { background: #14532d; color: #bbf7d0; }
+        .correct { font-size: 12px; margin-top: 8px; }
+        .correct.yes { color: #86efac; }
+        .correct.no { color: #fca5a5; }
+
+        .footnote { font-size: 11px; color: #64748b; margin-top: 22px; line-height: 1.5; text-align: center; }
+    </style>
+</head>
 <body>
-    <div class="login">
-       <h1>Student Exam Performance Indicator</h1>
-   
-       <form action="{{ url_for('predict_datapoint')}}" method="post">
-        <h1>
-            <legend>Student Exam Performance Prediction</legend>
-        </h1>
-        <div class="mb-3">
-            <label class="form-label">Gender</label>
-            <select class="form-control" name="gender" placeholder="Enter you Gender" required>
-                <option class="placeholder" selected disabled value="">Select your Gender</option>
-                <option value="male">
-                    Male
-                </option>
-                <option value="female">
-                    Female
-                </option>
-            </select>
+    <div class="card">
+        <h1>Predict a Transaction</h1>
+        <p class="sub">Pick a real transaction below. You won't be told in advance
+        whether it's fraud or not — the model makes its call, then you see the
+        real answer and whether it got it right.</p>
+
+        <form action="{{ url_for('predict_datapoint') }}" method="post">
+            <div class="txn-list">
+                {% for key, ex in demo_examples.items() %}
+                <button type="submit" name="txn" value="{{ key }}"
+                        class="txn-btn {{ 'picked' if picked_txn == key }}">
+                    <span>Transaction {{ loop.index }} — ${{ '%.2f'|format(ex.amount) }}</span>
+                    <span class="txn-id">t={{ ex.time|int }}s</span>
+                </button>
+                {% endfor %}
+            </div>
+        </form>
+
+        {% if results %}
+        <div class="result {{ 'fraud-bg' if results == 'FRAUD' else 'normal-bg' }}">
+            <div class="verdict">Model predicted: {{ results }} ({{ probability }}% fraud probability)</div>
+            <div class="correct {{ 'yes' if model_was_correct else 'no' }}">
+                Actual answer: {{ actual }} —
+                {% if model_was_correct %}the model got this one right ✓{% else %}the model got this one wrong ✗{% endif %}
+            </div>
         </div>
-        <div class="mb-3">
-            <label class="form-label">Race or Ethnicity</label>
-            <select class="form-control" name="ethnicity" placeholder="Enter you ethnicity" required>
-                <option class="placeholder" selected disabled value="">Select Ethnicity</option>
-                <option value="group A">
-                    Group A
-                </option>
-                <option value="group B">
-                    Group B
-                </option>
-                <option value="group C">
-                    Group C
-                </option>
-                <option value="group D">
-                    Group D
-                </option>
-                <option value="group E">
-                    Group E
-                </option>
-            </select>
-        </div>
-        <div class="mb-3">
-            <label class="form-label">Parental Level of Education</label>
-            <select class="form-control" name="parental_level_of_education"
-                placeholder="Enter you Parent Education" required>
-                <option class="placeholder" selected disabled value="">Select Parent Education</option>
-                <option value="associate's degree">
-                    associate's degree
-                </option>
-                <option value="bachelor's degree">
-                    bachelor's degree
-                </option>
-                <option value="high school">
-                    high school
-                </option>
-                <option value="master's degree">
-                    master's degree
-                </option>
-                <option value="some college">
-                    some college
-                </option>
-                <option value="some high school">
-                    some high school
-                </option>
-            </select>
-        </div>
-        <div class="mb-3">
-            <label class="form-label">Lunch Type</label>
-            <select class="form-control" name="lunch" placeholder="Enter you Lunch" required>
-                <option class="placeholder" selected disabled value="">Select Lunch Type</option>
-                <option value="free/reduced">
-                    free/reduced
-                </option>
-                <option value="standard">
-                    standard
-                </option>
-            </select>
-        </div>
-        <div class="mb-3">
-            <label class="form-label">Test preparation Course</label>
-            <select class="form-control" name="test_preparation_course" placeholder="Enter you Course"
-                required>
-                <option class="placeholder" selected disabled value="">Select Test_course</option>
-                <option value="none">
-                    None
-                </option>
-                <option value="completed">
-                    Completed
-                </option>
-            </select>
-        </div>
-        <div class="mb-3">
-            <label class="form-label">Writing Score out of 100</label>
-            <input class="form-control" type="number" name="reading_score"
-                placeholder="Enter your Reading score" min='0' max='100' />
-        </div>
-        <div class="mb-3">
-            <label class="form-label">Reading Score out of 100</label>
-            <input class="form-control" type="number" name="writing_score"
-                placeholder="Enter your Reading Score" min='0' max='100' />
-        </div>
-        <div class="mb-3">
-            <input class="btn btn-primary" type="submit" value="Predict your Maths Score" required />
-        </div>
-    </form>
-    <h2>
-       THE  prediction is {{results}}
-    </h2>
-   <body>
+        {% endif %}
+
+        {% if error %}
+        <div class="result" style="background:#334155; color:#fca5a5;">{{ error }}</div>
+        {% endif %}
+
+        <p class="footnote">Each transaction here is a real row from the dataset,
+        including its full set of 28 anonymized features — the model sees the same
+        data it was evaluated on, not a placeholder. Amount and time are shown
+        because that's genuinely all a person could plausibly know about a
+        transaction before checking; the other 28 features come from the card
+        network's own systems in a real deployment, not from a form.</p>
+    </div>
+</body>
 </html>
