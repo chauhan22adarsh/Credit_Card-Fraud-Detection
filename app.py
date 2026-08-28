@@ -1,46 +1,57 @@
-from flask import Flask,request,render_template
-import numpy as np
-import pandas as pd
+from flask import Flask, request, render_template
 
-from sklearn.preprocessing import StandardScaler
-from src.pipeline.predict_pipeline import CustomData,PredictPipeline
+from src.pipeline.predict_pipeline import CustomData, PredictPipeline, DEMO_EXAMPLES, GROUND_TRUTH
 
-application=Flask(__name__)
+application = Flask(__name__)
+app = application
 
-app=application
 
-## Route for a home page
-
-@app.route('/')
+@app.route("/")
 def index():
-    return render_template('index.html') 
+    return render_template("index.html")
 
-@app.route('/predictdata',methods=['GET','POST'])
+
+@app.route("/predictdata", methods=["GET", "POST"])
 def predict_datapoint():
-    if request.method=='GET':
-        return render_template('home.html')
+    if request.method == "GET":
+        # Only amount/time/id are shown to pick from — no fraud/normal
+        # labels anywhere, so the user genuinely doesn't know the answer.
+        return render_template("home.html", demo_examples=DEMO_EXAMPLES)
+
     else:
-        data=CustomData(
-            gender=request.form.get('gender'),
-            race_ethnicity=request.form.get('ethnicity'),
-            parental_level_of_education=request.form.get('parental_level_of_education'),
-            lunch=request.form.get('lunch'),
-            test_preparation_course=request.form.get('test_preparation_course'),
-            reading_score=float(request.form.get('writing_score')),
-            writing_score=float(request.form.get('reading_score'))
+        txn_key = request.form.get("txn")
 
+        if txn_key not in DEMO_EXAMPLES:
+            return render_template(
+                "home.html", demo_examples=DEMO_EXAMPLES,
+                error="Please choose one of the transactions above.",
+            )
+
+        example = DEMO_EXAMPLES[txn_key]
+        data = CustomData(
+            amount=example["amount"], time=example["time"], v_features=example["v"]
         )
-        pred_df=data.get_data_as_data_frame()
-        print(pred_df)
-        print("Before Prediction")
+        pred_df = data.get_data_as_dataframe()
 
-        predict_pipeline=PredictPipeline()
-        print("Mid Prediction")
-        results=predict_pipeline.predict(pred_df)
-        print("after Prediction")
-        return render_template('home.html',results=results[0])
-    
+        predict_pipeline = PredictPipeline()
+        prediction, probability = predict_pipeline.predict(pred_df)
 
-if __name__=="__main__":
-    app.run(host="0.0.0.0",port=5001,debug=True)        
+        model_said = "FRAUD" if prediction[0] == 1 else "Normal"
+        prob_pct = round(probability[0] * 100, 2)
 
+        actual = "FRAUD" if GROUND_TRUTH[txn_key] == 1 else "Normal"
+        model_was_correct = model_said == actual
+
+        return render_template(
+            "home.html",
+            demo_examples=DEMO_EXAMPLES,
+            picked_txn=txn_key,
+            results=model_said,
+            probability=prob_pct,
+            actual=actual,
+            model_was_correct=model_was_correct,
+        )
+
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5002, debug=True)
