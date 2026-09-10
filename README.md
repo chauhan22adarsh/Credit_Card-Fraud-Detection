@@ -1,18 +1,23 @@
 # Credit Card Fraud Detection
 
-A fraud detection project with three intentionally different layers,
-each serving a different purpose — not three versions of the same
-thing, but a notebook for exploration, a set of scripts for one-time
-rigorous comparison, and a fast deployable pipeline that uses what the
-other two found.
+A fraud detection project split into three layers that each do a
+different job and run in a specific order: `experiments/` first (finds
+the best model/technique/threshold), then `notebook/` (documents that
+process end-to-end, viewable on GitHub), then `src/` + `application.py`
+(the fast, deployable pipeline that uses what the other two decided).
 
-## Why three layers, not one
+## The three layers, in the order you actually run them
 
-| Layer | Purpose | Speed | Audience |
-|---|---|---|---|
-| `notebook/` | Explain the reasoning, viewable on GitHub | ~3 min to run | Anyone reviewing the project |
-| `experiments/` | One-time rigorous comparison (9 model×technique combos, threshold tuning, SHAP) | ~30-45 min to run | You, when deciding what to ship |
-| `src/` + `application.py` | Fast, deployable pipeline using the *already-decided* winning configuration | ~25 sec to run | The Flask app, or anyone running the pipeline repeatedly |
+| Layer | What it does |
+|---|---|
+| `experiments/` | Runs the 9 model×technique combinations under 5-fold CV, tunes the decision threshold, runs SHAP. This is where the winning configuration gets decided. |
+| `notebook/` | Loads the results `experiments/` already produced and walks through EDA → the comparison → threshold tuning → SHAP, with charts. Doesn't redo the comparison — just reads and explains it. |
+| `src/` + `application.py` | Trains one model (the winner from `experiments/`, hardcoded) and serves it via Flask. No comparison, no tuning — just executes the already-made decision, fast. |
+
+**Why this order matters:** the notebook's Section 5 reads
+`experiments/cv_results.json` directly — if you open the notebook before
+running `experiments/`, that cell fails with a clear error telling you
+to run `experiments/` first (see "How to run each layer" below).
 
 The comparison work in `experiments/` decided a fixed configuration —
 **XGBoost, `class_weight`-equivalent weighting, decision threshold
@@ -62,7 +67,7 @@ fraud-detection-project/
 │   ├── index.html                  ← landing page
 │   └── home.html                   ← pick-a-real-transaction demo (see below)
 │
-└── application.py                          ← Flask app: 2 routes, transaction picker → prediction
+└── application.py                  ← Flask app: 2 routes, transaction picker → prediction
 ```
 
 ## Dataset
@@ -72,13 +77,10 @@ https://www.kaggle.com/datasets/mlg-ulb/creditcardfraud
 
 ## How to run each layer
 
-**Notebook** (outputs already saved — this is optional):
-```bash
-pip install -r requirements.txt
-jupyter notebook notebook/fraud_detection.ipynb
-```
+Run these in order — the notebook depends on `experiments/` having
+already produced `cv_results.json`.
 
-**Experiments** (results are already saved in `experiments/cv_results.json`):
+**1. Experiments** :
 ```bash
 cd experiments
 python compare_techniques.py LogisticRegression smote
@@ -97,10 +99,16 @@ python compare_techniques.py summarize
 cd ..
 ```
 
-**Production pipeline** (fast — trains directly with the winning config):
+**2. Notebook** (reads what step 1 produced, doesn't recompute it):
 ```bash
-python -m src.components.data_ingestion   # ~25 seconds
-python application.py                              # starts the Flask demo
+pip install -r requirements.txt
+jupyter notebook notebook/fraud_detection.ipynb
+```
+
+**3. Production pipeline** (independent of steps 1-2, uses the hardcoded winning config):
+```bash
+python -m src.components.data_ingestion
+python application.py                      # starts the Flask demo
 ```
 
 ## What the comparison in `experiments/` found
