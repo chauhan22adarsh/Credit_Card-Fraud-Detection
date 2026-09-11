@@ -1,14 +1,15 @@
 pandas
 numpy
 scikit-learn
-xgboost==2.0.3
 dill
 flask
 # Uncomment the following lines to run full project
 #Commented out just for deployment configurations
 #imbalanced-learn
+#xgboost
 #shap
 #matplotlib
 #seaborn
 #jupyter
+xgboost==1.7.6
 -e .
