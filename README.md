@@ -8,11 +8,11 @@ process end-to-end, viewable on GitHub), then `src/` + `application.py`
 
 ## The three layers, in the order you actually run them
 
-| Layer | What it does | Actual runtime |
-|---|---|---|
-| `experiments/` | Runs the 9 model×technique combinations under 5-fold CV, tunes the decision threshold, runs SHAP. This is where the winning configuration gets decided. | ~2-3 min |
-| `notebook/` | Loads the results `experiments/` already produced and walks through EDA → the comparison → threshold tuning → SHAP, with charts. Doesn't redo the comparison — just reads and explains it. | ~30 sec |
-| `src/` + `application.py` | Trains one model (the winner from `experiments/`, hardcoded) and serves it via Flask. No comparison, no tuning — just executes the already-made decision, fast. | ~25 sec |
+| Layer | What it does |
+|---|---|
+| `experiments/` | Runs the 9 model×technique combinations under 5-fold CV, tunes the decision threshold, runs SHAP. This is where the winning configuration gets decided. |
+| `notebook/` | Loads the results `experiments/` already produced and walks through EDA → the comparison → threshold tuning → SHAP, with charts. Doesn't redo the comparison — just reads and explains it. |
+| `src/` + `application.py` | Trains one model (the winner from `experiments/`, hardcoded) and serves it via Flask. No comparison, no tuning — just executes the already-made decision, fast. |
 
 **Why this order matters:** the notebook's Section 5 reads
 `experiments/cv_results.json` directly — if you open the notebook before
