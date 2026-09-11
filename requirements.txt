@@ -8,5 +8,4 @@ flask
 shap
 matplotlib
 seaborn
-jupyter
 -e .
