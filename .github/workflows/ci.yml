@@ -16,10 +16,8 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
-          python-version: "3.10"
+          python-version: "3.12"
 
-      # Uses the same requirements.txt as everything else in the project
-      # (already exists in the repo — no second file to keep in sync).
       - name: Install dependencies
         run: |
           pip install -r requirements.txt
