@@ -8,11 +8,11 @@ process end-to-end, viewable on GitHub), then `src/` + `application.py`
 
 ## The three layers, in the order you actually run them
 
-| Layer | What it does |
-|---|---|
-| `experiments/` | Runs the 9 model×technique combinations under 5-fold CV, tunes the decision threshold, runs SHAP. This is where the winning configuration gets decided. |
-| `notebook/` | Loads the results `experiments/` already produced and walks through EDA → the comparison → threshold tuning → SHAP, with charts. Doesn't redo the comparison — just reads and explains it. |
-| `src/` + `application.py` | Trains one model (the winner from `experiments/`, hardcoded) and serves it via Flask. No comparison, no tuning — just executes the already-made decision, fast. |
+| Layer | What it does | Actual runtime |
+|---|---|---|
+| `experiments/` | Runs the 9 model×technique combinations under 5-fold CV, tunes the decision threshold, runs SHAP. This is where the winning configuration gets decided. | ~2-3 min |
+| `notebook/` | Loads the results `experiments/` already produced and walks through EDA → the comparison → threshold tuning → SHAP, with charts. Doesn't redo the comparison — just reads and explains it. | ~30 sec |
+| `src/` + `application.py` | Trains one model (the winner from `experiments/`, hardcoded) and serves it via Flask. No comparison, no tuning — just executes the already-made decision, fast. | ~25 sec |
 
 **Why this order matters:** the notebook's Section 5 reads
 `experiments/cv_results.json` directly — if you open the notebook before
@@ -80,6 +80,11 @@ https://www.kaggle.com/datasets/mlg-ulb/creditcardfraud
 Run these in order — the notebook depends on `experiments/` having
 already produced `cv_results.json`.
 
+**0. Install dependencies (once, before anything else):**
+```bash
+pip install -r requirements.txt
+```
+
 **1. Experiments** :
 ```bash
 cd experiments
@@ -101,7 +106,6 @@ cd ..
 
 **2. Notebook** (reads what step 1 produced, doesn't recompute it):
 ```bash
-pip install -r requirements.txt
 jupyter notebook notebook/fraud_detection.ipynb
 ```
 
@@ -170,3 +174,28 @@ but the model's real signal comes almost entirely from 28 other
 removed because it couldn't actually demonstrate the model. See
 `src/pipeline/predict_pipeline.py`'s `CustomData` docstring for the full
 reasoning.
+
+## CI/CD
+
+**CI** (`.github/workflows/ci.yml`): runs on every push and pull request
+to `main`. It doesn't just check that the code parses — it runs the
+**real** production pipeline (`python -m src.components.data_ingestion`)
+against the real dataset, confirms `artifacts/model.pkl` and
+`artifacts/preprocessor.pkl` actually get created, then confirms
+`application.py` loads correctly with that freshly-trained model. A
+broken data-loading step, a bug in `model_trainer.py`, or a typo in
+`application.py` all get caught here — not after deployment.
+
+`main` is a protected branch: GitHub blocks merging a pull request
+unless this CI check passes. Direct pushes to `main` also trigger the
+same check, but the real gate is on pull requests — day-to-day changes
+go through a branch + PR, not a direct push, specifically so a failing
+check can actually block a merge before it happens.
+
+**CD**: deployment to AWS Elastic Beanstalk is handled separately (via
+CodePipeline, watching `main`), not inside the GitHub Actions file.
+Since `main` only ever contains code that already passed CI, CodePipeline
+never deploys code that hasn't been checked — that's the actual
+connection between the two, achieved through branch protection rather
+than one pipeline directly triggering the other.
+
