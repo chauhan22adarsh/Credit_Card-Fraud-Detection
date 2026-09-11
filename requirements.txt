@@ -2,10 +2,13 @@ pandas
 numpy
 scikit-learn
 xgboost
-imbalanced-learn
 dill
 flask
-shap
-matplotlib
-seaborn
+# Uncomment the following lines to run full project
+#Commented out just for deployment configurations
+#imbalanced-learn
+#shap
+#matplotlib
+#seaborn
+#jupyter
 -e .
