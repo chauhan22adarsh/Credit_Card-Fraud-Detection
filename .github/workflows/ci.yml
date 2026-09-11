@@ -9,19 +9,30 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-
+    
       - name: Get my code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.10"
 
+      # Uses the same requirements.txt as everything else in the project
+      # (already exists in the repo — no second file to keep in sync).
       - name: Install dependencies
         run: |
-          pip install -r requirements-prod.txt
+          pip install -r requirements.txt
 
-      - name: Check the app actually imports (no syntax errors)
+      - name: Run the real training pipeline
+        run: |
+          python -m src.components.data_ingestion
+
+      - name: Check the model artifacts were actually created
+        run: |
+          test -f artifacts/model.pkl && echo "model.pkl exists"
+          test -f artifacts/preprocessor.pkl && echo "preprocessor.pkl exists"
+
+      - name: Check the Flask app loads with the trained model
         run: |
           python -c "import application"
